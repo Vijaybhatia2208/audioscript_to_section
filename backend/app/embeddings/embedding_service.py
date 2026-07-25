@@ -4,12 +4,19 @@ import logging
 from typing import List, Optional
 
 try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+try:
     from openai import OpenAI
 except ImportError:
     openai = None
     OpenAI = None
 
 logger = logging.getLogger(__name__)
+
 
 
 class EmbeddingService:
