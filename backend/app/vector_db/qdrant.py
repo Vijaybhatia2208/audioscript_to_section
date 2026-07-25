@@ -97,9 +97,14 @@ class QdrantService:
                 )
             )
 
-        # Execute batch upsert request into the specified collection
-        self.client.upsert(collection_name=self.collection_name, points=points)
+        # Execute chunked batch upserts to respect Qdrant HTTP request size limits (32 MB)
+        batch_size = 100
+        for i in range(0, len(points), batch_size):
+            batch_points = points[i : i + batch_size]
+            self.client.upsert(collection_name=self.collection_name, points=batch_points)
+
         return len(points)
+
 
     def search(self, query_vector: List[float], limit: int = 5) -> List[Dict[str, Any]]:
         """
@@ -113,18 +118,27 @@ class QdrantService:
             List[Dict[str, Any]]: List of dictionary payloads corresponding to top matches,
                                   with similarity 'score' attached.
         """
-        # Execute nearest neighbor search using the query vector
-        results = self.client.search(
-            collection_name=self.collection_name,
-            query_vector=query_vector,
-            limit=limit
-        )
+        # Execute nearest neighbor search using modern query_points API or search fallback
+        if hasattr(self.client, "query_points"):
+            response = self.client.query_points(
+                collection_name=self.collection_name,
+                query=query_vector,
+                limit=limit
+            )
+            results = response.points
+        else:
+            results = self.client.search(
+                collection_name=self.collection_name,
+                query_vector=query_vector,
+                limit=limit
+            )
 
         output = []
         # Convert Qdrant ScoredPoint search result items into standard dict structures with scores
         for res in results:
-            item = dict(res.payload)
+            item = dict(res.payload) if res.payload else {}
             item["score"] = res.score
             output.append(item)
         return output
+
 
